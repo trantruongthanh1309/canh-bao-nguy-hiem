@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Hệ Thống Cảnh Báo Nguy Hiểm</title>
+    <link rel="stylesheet" href="/static/style.css" />
+
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  </head>
+
+  <body>
+    <div class="container">
+      <h1>🚨 HỆ THỐNG CẢNH BÁO NGUY HIỂM 🚨</h1>
+
+      <!-- FORM CẢNH BÁO -->
+      <form id="alert-form" method="POST" action="/alert" class="alert-form">
+        <input type="hidden" name="lat" id="lat" />
+        <input type="hidden" name="lng" id="lng" />
+        <button type="submit">GỬI CẢNH BÁO NGAY</button>
+      </form>
+
+      <!-- BẢN ĐỒ -->
+      <div id="map" style="height: 400px; margin: 20px 0"></div>
+
+      <!-- DANH SÁCH -->
+      <div class="alert-list">
+        <h2>📋 Danh sách cảnh báo gần đây:</h2>
+        <ul></ul>
+      </div>
+    </div>
+
+    <script>
+      // GỬI VỊ TRÍ NGAY KHI NHẤN NÚT
+      document
+        .getElementById("alert-form")
+        .addEventListener("submit", function (e) {
+          e.preventDefault();
+          if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+              function (position) {
+                document.getElementById("lat").value = position.coords.latitude;
+                document.getElementById("lng").value =
+                  position.coords.longitude;
+                e.target.submit(); // gửi form
+              },
+              function () {
+                alert("Không thể lấy vị trí. Vui lòng bật định vị.");
+              }
+            );
+          } else {
+            alert("Trình duyệt không hỗ trợ định vị.");
+          }
+        });
+
+      // BẢN ĐỒ
+      const map = L.map("map").setView([16.047079, 108.20623], 13);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap contributors",
+      }).addTo(map);
+
+      let markers = [];
+
+      function fetchAlerts() {
+        fetch("/api/alerts")
+          .then((res) => res.json())
+          .then((data) => {
+            // Xóa marker cũ
+            markers.forEach((marker) => map.removeLayer(marker));
+            markers = [];
+
+            // Hiển thị danh sách
+            const list = document.querySelector(".alert-list ul");
+            list.innerHTML = "";
+
+            data.forEach((alert) => {
+              // Thêm marker mới
+              const marker = L.marker([alert.lat, alert.lng])
+                .addTo(map)
+                .bindPopup(`⏰ ${alert.time}<br>📍 ${alert.lat}, ${alert.lng}`);
+              markers.push(marker);
+
+              // Thêm vào danh sách
+              const li = document.createElement("li");
+              li.textContent = `⏰ ${alert.time} – 📍 ${alert.lat}, ${alert.lng}`;
+              list.appendChild(li);
+            });
+          });
+      }
+
+      // Gọi ngay và mỗi 5s cập nhật
+      fetchAlerts();
+      setInterval(fetchAlerts, 5000);
+    </script>
+    <script>
+      // Kiểm tra hỗ trợ trình duyệt
+      const Recognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+
+      if (Recognition) {
+        const recognition = new Recognition();
+        recognition.continuous = true;
+        recognition.lang = "vi-VN";
+        recognition.interimResults = false;
+
+        recognition.onstart = () => {
+          console.log("🎤 Hệ thống đang nghe...");
+        };
+
+        recognition.onresult = function (event) {
+          const transcript = event.results[
+            event.results.length - 1
+          ][0].transcript
+            .trim()
+            .toLowerCase();
+          console.log("🗣️ Bạn vừa nói:", transcript);
+
+          if (transcript.includes("alo")) {
+            console.log("✅ Phát hiện 'alo' – gửi cảnh báo");
+            sendLocation();
+          }
+        };
+
+        recognition.onerror = function (e) {
+          console.error("❌ Lỗi nhận diện:", e.error);
+        };
+
+        recognition.start();
+      } else {
+        alert("⚠️ Trình duyệt không hỗ trợ SpeechRecognition.");
+      }
+
+      // Gửi vị trí
+      function sendLocation() {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            function (position) {
+              const formData = new FormData();
+              formData.append("lat", position.coords.latitude);
+              formData.append("lng", position.coords.longitude);
+
+              fetch("/alert", {
+                method: "POST",
+                body: formData,
+              }).then(() => {
+                alert("🚨 Đã gửi cảnh báo vì bạn nói 'alo'");
+              });
+            },
+            function () {
+              alert("⚠️ Không thể lấy vị trí.");
+            }
+          );
+        } else {
+          alert("⚠️ Trình duyệt không hỗ trợ định vị.");
+        }
+      }
+    </script>
+    <script>
+      const SpeechRecogClass =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+
+      if (Recognition) {
+        const recognition = new Recognition();
+        recognition.continuous = true;
+        recognition.lang = "vi-VN";
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 0.1;
+
+        recognition.onstart = () => {
+          console.log("🎤 Hệ thống đang nghe...");
+        };
+
+        recognition.onresult = function (event) {
+          let transcript = "";
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            transcript += event.results[i][0].transcript + " ";
+          }
+
+          transcript = transcript.trim().toLowerCase();
+          console.log("🗣️ Bạn nói:", transcript);
+
+          // Danh sách từ khóa: cả từ đơn và cụm từ
+          const keywords = [
+            "alo",
+            "cứu",
+            "giúp",
+            "giúp tôi",
+            "cứu với",
+            "em bị bắt",
+            "trợ giúp",
+            "khẩn cấp",
+            "help",
+          ];
+
+          // Kiểm tra nếu nội dung chứa bất kỳ từ khóa nào
+          const matched = keywords.some((keyword) =>
+            transcript.includes(keyword)
+          );
+
+          if (matched) {
+            console.log("✅ Phát hiện từ khẩn cấp – gửi cảnh báo");
+            sendAlertWithAudio();
+            recognition.abort(); // dừng tạm để tránh lặp
+          }
+        };
+
+        recognition.onerror = function (e) {
+          console.error("❌ Lỗi nhận diện:", e.error);
+        };
+
+        recognition.onend = () => {
+          console.log("🔁 Tự khởi động lại sau khi kết thúc");
+          recognition.start(); // tự restart sau mỗi lần dừng
+        };
+
+        recognition.start();
+      } else {
+        alert("⚠️ Trình duyệt không hỗ trợ SpeechRecognition.");
+      }
+
+      function sendLocation(message) {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            function (position) {
+              const formData = new FormData();
+              formData.append("lat", position.coords.latitude);
+              formData.append("lng", position.coords.longitude);
+
+              fetch("/alert", {
+                method: "POST",
+                body: formData,
+              }).then(() => {
+                alert(message);
+              });
+            },
+            function () {
+              alert("⚠️ Không thể lấy vị trí.");
+            }
+          );
+        } else {
+          alert("⚠️ Trình duyệt không hỗ trợ định vị.");
+        }
+      }
+    </script>
+    <script>
+      let mediaRecorder;
+      let audioChunks = [];
+
+      // Chuẩn bị mic ghi âm ngay từ đầu
+      navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+        mediaRecorder = new MediaRecorder(stream);
+
+        mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+
+        mediaRecorder.onstop = () => {
+          const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+          audioChunks = [];
+
+          const formData = new FormData();
+          formData.append("audio", audioBlob, "recording.webm");
+
+          // LẤY VỊ TRÍ để gửi cùng
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              formData.append("lat", position.coords.latitude);
+              formData.append("lng", position.coords.longitude);
+
+              // GỬI về Flask
+              fetch("/alert_audio", {
+                method: "POST",
+                body: formData,
+              }).then(() => {
+                alert("🚨 Đã gửi cảnh báo + ghi âm thành công!");
+              });
+            },
+            function () {
+              alert("⚠️ Không thể lấy vị trí.");
+            }
+          );
+        };
+      });
+
+      // Gọi hàm này khi phát hiện từ khóa nguy hiểm
+      function sendAlertWithAudio() {
+        if (mediaRecorder && mediaRecorder.state !== "recording") {
+          audioChunks = [];
+          mediaRecorder.start();
+          setTimeout(() => mediaRecorder.stop(), 5000); // ghi 3 giây
+        }
+      }
+    </script>
+  </body>
+</html>

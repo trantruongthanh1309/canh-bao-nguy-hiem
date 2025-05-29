@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: he-thong-canh-bao
+    env: python
+    plan: free
+    buildCommand: ""
+    startCommand: python app.py
