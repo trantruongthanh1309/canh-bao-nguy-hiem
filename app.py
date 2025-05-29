@@ -86,4 +86,4 @@ def alert_audio():
     return '', 204
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0')
